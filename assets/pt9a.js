@@ -1,0 +1,38 @@
+(()=>{'use strict';
+const DATA='padeltools_playerhub_75',ASSESS='padeltools_coach_assessment_9a';
+const $=id=>document.getElementById(id),form=$('pt9a-form');if(!form)return;
+const names={volley:'Volea',overhead:'Bandeja / víbora',wall:'Defensa de pared',positioning:'Posicionamiento'};
+const drills={volley:'Practica 3 bloques de 8 voleas controladas, priorizando profundidad y colocación antes que potencia.',overhead:'Trabaja 3 series de 10 bandejas con objetivo de profundidad, recuperando la posición tras cada golpe.',wall:'Realiza 3 bloques de 8 salidas de pared, buscando preparación temprana y margen sobre la red.',positioning:'Haz 10 minutos de desplazamientos coordinados con tu pareja y recuperación de posición después de cada golpe.'};
+function read(k){try{return JSON.parse(localStorage.getItem(k)||'null')}catch{return null}}
+function validDate(s){if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;const d=new Date(s+'T12:00:00');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===s}
+function item(title,desc){const el=document.createElement('div');el.className='pt9a-item';const b=document.createElement('strong'),p=document.createElement('p');b.textContent=title;p.textContent=desc;el.append(b,p);return el}
+function metric(value,label){const el=document.createElement('div');el.className='pt9a-metric';const b=document.createElement('strong'),s=document.createElement('span');b.textContent=value;s.textContent=label;el.append(b,s);return el}
+function render(){const data=read(DATA),assessment=read(ASSESS)||{};const matches=(Array.isArray(data?.matches)?data.matches:[]).filter(m=>m&&validDate(m.date)&&(m.result==='win'||m.result==='loss')).slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id||'').localeCompare(String(a.id||'')));
+const total=matches.length,wins=matches.filter(m=>m.result==='win').length,recent=matches.slice(0,10),recentWins=recent.filter(m=>m.result==='win').length,previous=matches.slice(10,20),previousWins=previous.filter(m=>m.result==='win').length;
+const now=new Date(),cutoff=new Date(now.getFullYear(),now.getMonth(),now.getDate()-29),recent30=matches.filter(m=>new Date(m.date+'T12:00:00')>=cutoff&&new Date(m.date+'T12:00:00')<=now),training=Array.isArray(data?.training)?data.training:[];
+let streak=0;if(matches.length)for(const m of matches){if(m.result!==matches[0].result)break;streak++}
+$('pt9a-metrics').replaceChildren(metric(String(total),'Partidos registrados'),metric(total?Math.round(wins/total*100)+' %':'—','Victorias totales'),metric(recent.length?recentWins+'/'+recent.length:'—','Victorias últimos 10'),metric(String(recent30.length),'Partidos últimos 30 días'));
+const ins=$('pt9a-insights'),rec=$('pt9a-recommendations');ins.replaceChildren();rec.replaceChildren();
+if(!total){$('pt9a-headline').textContent='Empieza con tu primer partido';$('pt9a-intro').textContent='Registra resultados para recibir un análisis de evolución basado en datos reales.';ins.append(item('Sin resultados todavía','No hay suficientes partidos para observar tendencias.'));rec.append(item('Primer paso','Registra tus próximos partidos en la pestaña Partidos. Después vuelve aquí.'))}
+else{$('pt9a-headline').textContent=recent.length>=5?(recentWins/recent.length>=.6?'Buen balance reciente':recentWins/recent.length<=.3?'Momento de revisar hábitos':'Rendimiento en construcción'):'Primeras señales de tu juego';$('pt9a-intro').textContent=`Has ganado ${wins} de ${total} partidos registrados. En tus últimos ${recent.length}, has conseguido ${recentWins} victorias.`;
+if(total<5)ins.append(item('Muestra pequeña','Con menos de cinco partidos, cualquier porcentaje puede cambiar mucho. Evita sacar conclusiones definitivas.'));
+if(recent.length>=5){ins.append(item('Balance reciente',`${recentWins} victorias y ${recent.length-recentWins} derrotas en los últimos ${recent.length} partidos.`));if(previous.length>=5){const delta=Math.round((recentWins/recent.length-previousWins/previous.length)*100);ins.append(item('Evolución frente al bloque anterior',`${delta>0?'+':''}${delta} puntos porcentuales en porcentaje de victorias respecto a los ${previous.length} partidos anteriores. Comparación descriptiva, no causal.`))}}
+if(streak>=2)ins.append(item('Racha actual',`${streak} ${matches[0].result==='win'?'victorias':'derrotas'} consecutivas en el historial ordenado por fecha.`));
+ins.append(item('Actividad reciente',`${recent30.length} partidos registrados en los últimos 30 días y ${training.length} sesiones de entrenamiento en todo el historial.`));
+if(recent.length>=5&&recentWins/recent.length<=.3)rec.append(item('Revisión tras el partido','Después de cada encuentro anota dos situaciones que te hicieron perder puntos y una decisión que repetirías. El marcador no identifica la causa.'));
+else if(recent.length>=5&&recentWins/recent.length>=.6)rec.append(item('Consolida lo que funciona','Mantén una rutina de calentamiento y anota qué decisiones tácticas funcionaron en los últimos encuentros.'));
+else rec.append(item('Construye una referencia','Registra al menos diez partidos para comparar dos bloques consecutivos de resultados.'));
+if(recent30.length===0)rec.append(item('Vuelve a jugar','No aparecen partidos en los últimos 30 días. Si has jugado, registra los resultados antes de interpretar la actividad.'));
+}
+const rated=Object.keys(names).filter(k=>Number.isInteger(Number(assessment[k]))&&Number(assessment[k])>=1&&Number(assessment[k])<=5);const weakest=rated.sort((a,b)=>Number(assessment[a])-Number(assessment[b]));
+if(weakest.length){const key=weakest[0];rec.prepend(item('Prioridad según tu autoevaluación: '+names[key],drills[key]));ins.append(item('Confianza técnica declarada',`${names[key]}: ${assessment[key]}/5. Esta prioridad procede de tu autoevaluación, no del marcador.`))}
+else rec.append(item('Personaliza tu entrenamiento','Completa la autoevaluación para añadir ejercicios específicos a tus recomendaciones.'));
+$('pt9a-evidence').textContent=`Base: ${total} partidos · ${rated.length} habilidades autoevaluadas · Datos locales`;
+}
+function restore(){const saved=read(ASSESS);if(!saved||typeof saved!=='object')return;for(const k of ['level','position',...Object.keys(names)])if(form.elements[k])form.elements[k].value=String(saved[k]??'')}
+form.addEventListener('submit',e=>{e.preventDefault();const f=new FormData(form),next={updatedAt:new Date().toISOString()};for(const k of ['level','position',...Object.keys(names)]){const value=String(f.get(k)||'');next[k]=Object.hasOwn(names,k)?(/^[1-5]$/.test(value)?value:''):value}try{localStorage.setItem(ASSESS,JSON.stringify(next));$('pt9a-status').textContent='Evaluación guardada en este dispositivo.';render()}catch{$('pt9a-status').textContent='No se pudo guardar. Revisa el almacenamiento del navegador.'}});
+$('pt9a-clear').addEventListener('click',()=>{if(!confirm('¿Borrar únicamente tu autoevaluación técnica? Tus partidos no se modificarán.'))return;try{localStorage.removeItem(ASSESS);form.reset();$('pt9a-status').textContent='Autoevaluación eliminada.';render()}catch{$('pt9a-status').textContent='No se pudo borrar la evaluación.'}});
+restore();render();window.addEventListener('pageshow',render);document.addEventListener('visibilitychange',()=>{if(!document.hidden)render()});window.addEventListener('storage',e=>{if(e.key===DATA||e.key===ASSESS){if(e.key===ASSESS)restore();render()}});
+// Render after match creation, editing, removal and JSON import without modifying 8B.
+const original=window.PT8B?.render;if(typeof original==='function')window.PT8B.render=function(state){const value=original.call(this,state);render();return value};
+})();
